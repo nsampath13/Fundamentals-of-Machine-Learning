@@ -1,0 +1,204 @@
+---
+title: "k_NN Classification - Universal Bank"
+output:
+  word_document: default
+  html_notebook: default
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+##Loading Data and packages
+```{r}
+getwd()
+data1 <- data.frame(read.csv("UniversalBank.csv"))
+str(data1)
+
+library("ISLR")
+library("caret")
+library("class")
+library("ggplot2")
+library("gmodels")
+```
+##Data Cleaning
+```{r}
+data1 <- data1[,c(-1,-5)]
+head(data1, n=5)
+
+test.na <- is.na.data.frame("data1")
+
+##Converting data types of attributes
+data1$Education <- as.character(data1$Education)
+is.character(data1$Education)
+
+
+data1$Personal.Loan <- as.factor(data1$Personal.Loan)
+is.factor(data1$Personal.Loan)
+
+##Dummying Variables
+DummyVariables <- dummyVars(~Education, data1)
+head(predict(DummyVariables, data1))
+data2 <- predict(DummyVariables,data1)
+
+##Combining Data
+data3 <- data1[,-6]
+data4 <- cbind(data3,data2)
+colnames(data4)
+```
+
+
+##Data Partition and Normalization 
+```{r}
+set.seed(123)
+Data_Part_Train <- createDataPartition(data4$Personal.Loan, p=0.6, list=F)
+Train_Data <- data4[Data_Part_Train,]
+Validation_Data <- data4[-Data_Part_Train,]
+
+#Normalizing the training dataset
+Model_Z_Normalized <- preProcess(Train_Data[,-c(7,12:14)], method=c("center","scale"))
+
+Normalized_Data_Train <- predict(Model_Z_Normalized, Train_Data)
+
+Normalized_Data_Validation <- predict(Model_Z_Normalized, Validation_Data)
+
+#summary(Normalized_Data_Train)
+#summary(Normalized_Data_Validation)
+```
+
+
+##Inserting a test set and normalizing it
+```{r}
+test_data <- cbind.data.frame(Age = 40,Experience = 10, Income = 84, Family = 2, CCAvg = 2, Mortgage = 0, Securities.Account = 0, CD.Account = 0, Online = 1, CreditCard = 1, Education1 = 0, Education2 = 1, Education3 = 0)
+
+Test_Normalized <- predict(Model_Z_Normalized, test_data)
+```
+
+#1. Running the knn model on the test dataset with k=1
+```{r}
+Train_Predictors <- Normalized_Data_Train[,-7]
+Validation_Predictors <- Normalized_Data_Validation[,-7]
+
+Train_Labels <- Normalized_Data_Train[,7]
+Validate_Lables <- Normalized_Data_Validation[,7]
+
+Predicted_K <- knn(Train_Predictors, Test_Normalized, cl=Train_Labels, k=1)
+
+head(Predicted_K)
+```
+When k=1 the customer is classified as 0 which indicates that the loan is not accepted. Since factor 1 is classified as loan acceptance and 0 is not accepted.
+
+
+#2. Choice of k that balances between overfitting and ignoring the predictor information
+```{r}
+set.seed(455)
+search_grid <- expand.grid(k=c(1:30))
+#trtcontrol <- trainControl(method="repeatedcv")
+model <- train(Personal.Loan~Age+Experience+Income+Family+CCAvg+Mortgage+Securities.Account+CD.Account+Online+CreditCard+Education1+Education2+Education3, data=Normalized_Data_Train, method="knn", tuneGrid = search_grid)
+model
+best_k <- model$bestTune[[1]]
+best_k
+```
+The k value which balances between over fitting and ignoring the predictor information is k = 1. 
+
+#Plotting the model
+```{r}
+plot(model)
+```
+
+
+#3. Confusion matrix being deployed over the validation data
+```{r}
+pred_training <- predict(model,Normalized_Data_Validation[,-7])
+confusionMatrix(pred_training, Validate_Lables)
+```
+Miscalculations = 73, Accuracy = 0.9635, Sensitivity = 0.9895
+
+#4. Running the test data with best k choosen above
+```{r}
+test_best_k <- knn(Train_Predictors, Test_Normalized, cl=Train_Labels, k=best_k)
+head(test_best_k)
+```
+With the best k being choosen, the customer is classified as 0 which indicates that the loan is not accepted.
+
+
+#5. Repartitioning the data into training(50%), validation(30%) and test(20%) and running the entire model with best k
+```{r}
+set.seed(422)
+data_part <- createDataPartition(data4$Personal.Loan, p=0.5, list = F)
+n_train_data <- data4[data_part,]
+nd_test_data <- data4[-data_part,]
+
+data_part_v <- createDataPartition(nd_test_data$Personal.Loan,p=0.6, list =F)
+n_validate_data <- nd_test_data[data_part_v,]
+n_test_data <- nd_test_data[-data_part_v,]
+
+#Normalization
+norm_m <- preProcess(n_train_data[,-c(7,12:14)],method=c("center","scale"))
+
+train_z <- predict(norm_m, n_train_data)
+validate_z <- predict(norm_m, n_validate_data)
+test_z <- predict(norm_m, n_test_data)
+
+#Defining the predictors and labels
+n_train_predictor <- train_z[,-7]
+n_validate_predictor <- validate_z[,-7]
+n_test_predictor <- test_z[,-7]
+
+n_train_labels <- train_z[,7]
+n_validate_labels <- validate_z[,7]
+n_test_labels <- test_z[,7]
+
+#running the knn model over train dataset
+n_model <- knn(n_train_predictor,n_train_predictor,cl=n_train_labels,k=best_k)
+head(n_model)
+
+#running the knn model over validation dataset
+n_model1 <- knn(n_train_predictor,n_validate_predictor,cl=n_train_labels,k=best_k)
+head(n_model1)
+
+#running the knn model over test dataset
+n_model2 <- knn(n_train_predictor,n_test_predictor,cl=n_train_labels,k=best_k)
+head(n_model2)
+```
+
+#Using CrossTable to compare the Test vs Training and Validation
+```{r}
+confusionMatrix(n_model,n_train_labels)
+```
+#Train_Data -
+Miscalculations = 0
+Accuracy = 1
+Sensitivity = 1
+#(This is because both the train and test datasets are same, model has already seen the data and hence it cannot predict anything wrong, which results in 100% Accuracy and 0 Miscalulations).
+
+
+```{r}
+confusionMatrix(n_model1,n_validate_labels)
+```
+#Validation Data - 
+Miscalculations = 22 + 55 = 77
+Accuracy = 0.9487
+Sensitivity = 0.9838
+
+
+```{r}
+confusionMatrix(n_model2,n_test_labels)
+```
+#Test_Data -
+Miscalculations = 39
+Accuracy = 0.961
+Sensitivity = 0.9856
+
+#Interpretation:
+When comparing the test with that of training and validation, we shall exclude train from this consideration because a model will mostly result in 100% accuracy when it has the seen data.
+
+Miscalculations:
+Validation - 77, Test - 39 
+
+Accuracy:
+Validation - 0.9487, Test - 0.961
+
+Sensitivty:
+Validation - 0.9838, Test - 0.9856
+
+We see that the Test data has fewer misalculations, greater accuracy and sensitivity when compared to that of the validation data, by this we can say that the model works well on the unseen data.
