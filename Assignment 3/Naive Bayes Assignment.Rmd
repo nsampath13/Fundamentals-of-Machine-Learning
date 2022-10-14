@@ -1,0 +1,124 @@
+---
+title: "**Naive Bayes Assignment**"
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+editor_options: 
+  markdown: 
+    wrap: 72
+    
+---
+*Setting default values to get a clean output*
+```{r}
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+*Loading all the required packages as well as the data*
+```{r}
+library("class")
+library("caret")
+library("e1071")
+library("dplyr")
+library("ggplot2")
+library("gmodels")
+library("melt")
+library("reshape")
+library("reshape2")
+library("readr")
+library("ISLR")
+library("pROC")
+
+
+data.df <- read.csv("UniversalBank.csv")
+```
+
+
+
+*Data Cleaning and Normalization*
+```{r}
+#Converting the predictor attributes to factors
+data.df$Personal.Loan <- as.factor(data.df$Personal.Loan)
+data.df$Online <- as.factor(data.df$Online)
+data.df$CreditCard <- as.factor(data.df$CreditCard)
+
+#checking for na values
+test.na <- is.na.data.frame(data.df)
+
+#Data Partition
+set.seed(123)
+data_part <- createDataPartition(data.df$Personal.Loan,p=.6, list=F)
+Train <- data.df[data_part,]
+Validate <- data.df[-data_part,]
+
+#Data Normalization
+norm_model <- preProcess(Train[,-c(10,13:14)], 
+                method=c("center","scale"))
+Train_norm <- predict(norm_model,Train)
+Validate_norm <- predict(norm_model,Validate)
+```
+
+
+***A. Create a pivot table for the training data with Online as a column variable, CC as a row variable, and Loan as a secondary row variable***
+```{r}
+table_1 <- ftable(Train_norm[,c(14,10,13)])
+table_1
+```
+
+
+***B. The probability of customer accepting loan and using credit card plus being an online banking user = 51/(51+467) = 0.0984*** \vspace{3mm}\newline
+
+
+***C. Creation of pivot tables for the training data where one will have Loan (rows) as a function of Online (columns) and the other will have Loan (rows) as a function of CC (columns)*** \vspace{2mm}\newline
+```{r}
+melt_t1 <- melt(Train_norm,id=c("Personal.Loan"),variable="Online")
+melt_t2 <- melt(Train_norm,id=c("Personal.Loan"), variable="CreditCard")
+
+cast_t1 <- dcast(melt_t1, Personal.Loan~Online)
+cast_t2 <- dcast(melt_t2, Personal.Loan~CreditCard)
+```
+
+***D.Compute the following quantities [P(A | B) i.e. the probability of A given B]***
+```{r}
+ftable(Train_norm[,c(10,13)])
+
+ftable(Train_norm[,c(10,14)])
+
+ftable(Train_norm[,10])
+```
+
+
+*1. P(CC = 1 | Loan = 1) = 84/(84+204) =* ***0.2916***\vspace{3mm}\newline
+*2. P(Online= 1 | Loan= 1) = 176/(176+112) =* ***0.6111***\vspace{3mm} \newline
+*3. P(Loan = 1) = 288/(288+2712) =* ***0.096***\vspace{3mm} \newline
+*4. P(CC= 1 | Loan= 0) = 777/(777+1935) =* ***0.2865***\vspace{3mm} \newline
+*5. P(Online=1 |Loan=0) = 1611/(1611+1101) =* ***0.5940***\vspace{3mm} \newline
+*6. P(Loan = 0) = 2712/(2712+288) =* ***0.904***\vspace{3mm} \newline
+
+
+***E. Use the quantities computed above to compute the Naive Bayes probability P(Loan = 1 | CC = 1, Online = 1)***
+
+(0.2916 x 0.6111 x 0.096) / (0.2916 x 0.6111 x 0.096) + (0.2865 x 0.5940 x 0.904) = ***0.1000*** \vspace{3mm}\newline
+
+
+***F. By comparing the value obtained above by using the Naive Bayes probability i.e. 0.1000 to the value obtained in step b i.e. 0.0984 we get to see that both the values are almost similar, but Naive Bayes has a bit higher probability when compared to that with the direct calculation.*** \vspace{3mm}\newline
+
+
+***G. Run the Naive Bayes Model***
+```{r}
+naive <- naiveBayes(Personal.Loan~Online+CreditCard,data=Train_norm)
+naive
+```
+***The value obtained by running the Naive Bayes Model for the customer who is accepting the loan and using credit card plus being an online banking user is 0.1000 which is equivalent to the value obtained in E*** \vspace{3mm}\newline
+
+
+*Predicting the Naive Bayes model over the validation data and also looking at the AUC Value and ROC Curve*
+```{r}
+pred_labels <- predict(naive,Validate_norm,type = "raw")
+head(pred_labels)
+
+roc(Validate_norm$Online,pred_labels[,2])
+
+plot.roc(Validate_norm$Online,pred_labels[,2])
+```
