@@ -1,0 +1,150 @@
+---
+title: "K-Means Assignment"
+output:
+  pdf_document: default
+  html_notebook: default
+  word_document: default
+  html_document:
+    df_print: paged
+---
+*Setting default values to get a clean output*
+```{r}
+knitr::opts_chunk$set(message = FALSE)
+knitr::opts_chunk$set(warning = FALSE)
+```
+
+*Loading the required packages*
+```{r}
+library("tidyverse")
+library("factoextra")
+library("ggplot2")
+library("dplyr")
+```
+
+*Loading the data*
+```{r}
+pharma.df <- read.csv("Pharmaceuticals.csv")
+```
+
+*Looking for na values*
+```{r}
+colMeans(is.na(pharma.df))
+```
+
+*Normalization and finding the optimal k*
+```{r}
+pharma.df.norm <- scale(pharma.df[,-c(1:2,12:14)])
+
+wss <- fviz_nbclust(pharma.df.norm,kmeans,method="wss")
+wss
+
+silhouette <- fviz_nbclust(pharma.df.norm,kmeans,method="silhouette")
+silhouette
+```
+*The optimal k thereby received using the wss method is k = 2 whereas by employing the silhouette method the optimal k received was k = 5.*
+\newline
+
+*Formulation of clusters using K-Means with k = 2 (WSS)*
+```{r}
+wss_kmeans <- kmeans(pharma.df.norm,centers = 2,nstart=25)
+wss_kmeans
+```
+*Formulation of clusters using K-Means with k = 5 (Silhouette)*
+```{r}
+silhouette_kmeans <- kmeans(pharma.df.norm,centers=5,nstart=25)
+silhouette_kmeans
+```
+*Cluster Plot (WSS)*
+```{r}
+fviz_cluster(wss_kmeans,pharma.df[,-c(1:2,12:15)],main="Cluster_WSS")
+```
+*By employing the WSS Method we get 2 clusters of size 11 and 10.*
+\newline
+
+*Cluster Plot (Silhouette)*
+```{r}
+fviz_cluster(silhouette_kmeans,pharma.df[,-c(1:2,12:15)],main="Cluster_Silhouette")
+```
+*By employing the Silhouette Method we get 5 clusters of size 3, 2, 8, 4 and 4.*
+\newline
+
+*Binding the cluster assignment to the original data frame for analysis*
+```{r}
+clusters_wss <- wss_kmeans$cluster
+clusters_silhouette <- silhouette_kmeans$cluster
+
+pharma.df.1 <- cbind(pharma.df,clusters_wss)
+pharma.df.2 <- cbind(pharma.df,clusters_silhouette)
+```
+
+*Aggregating the clusters to interpret the attributes - WSS*
+```{r}
+int_wss <- aggregate(pharma.df.1[,-c(1:2,12:14)],by=list(pharma.df.1$clusters_wss),FUN="median")
+print(int_wss[,-1])
+```
+***Interpretation:***\vspace{1mm}
+\newline
+*Note: The interpretation is solely based on the financial attributes of the given firms in each of the clusters, the interpretation obtained would be thereby helping an individual to take a decision regarding choosing an cluster among the two to invest in order to gain profits.*\vspace{2mm}
+\newline
+***Acceptable Profitability with Moderate Risk***\vspace{2mm}
+\newline
+*The First cluster here obtained is a good investment because of the high probability of success. The success is defined here with the help of the attributes "Market Capital", ROE - Return on Expenditure, ROA - Return on Assets, Asset Turnover and Net Profit Margin. The capital value in this cluster is 73.84, ROE which basically helps us know the returns on the money we put in as investment is high i.e. 31 and that of ROA which is the returns a firm expects to receive on the money they invest on the assets is also high i.e. 15. Similarly the turnover on the assets and net profit is high as well.The PE Ratio is less with that of the second cluster indicating that the company is properly valued without any disparity in it's share prices.*\vspace{0.3mm}
+\newline
+*The level of risk in this investment is low which is called out by the "Beta" value, generally beta value should be lower than 1 in this case it is 0.46 which refers that the variability in these firms would be moderate not having enough of fluctuations.Also the "Leverage" value, which refers to a firm having borrowed capital for an investment should be as less as possible because market is always unpredictable and there would be possibilities of a firm loosing the money which they have borrowed for an investment expecting profits in return. Here the leverage value is 0.28 which is comparatively less to the second cluster. "With a good investment there should be very little chance of losing the total amount invested" and the group of firms in this cluster are expressing higher success rate when compared to that with the second cluster.*\vspace{3mm}
+\newline
+***Low Profitability with High Risk***\vspace{2mm}
+\newline
+*Here, the second cluster is having poor performance metrics when compared with that with the first cluster, the market capital is very less i.e. 4.78 with that of 73.84 in first cluster, this shows the firms listed in this cluster are having less market share when compared to that with the first cluster. Return on Expenditure (ROE), Return on Assets (ROA), Asset Turnover, Net Profit Margin is less as well. The level of risk which is called out by the Beta and Leverage value is high in these firms which means that there is high variability and high borrowings in these firms with contrast to that with the first cluster. Comparatively the PE Ratio is high as well stating that the company's share value is overvalued, making it as a negative mark to these companies.*\vspace{1mm}
+\newline
+
+***Pattern in the categorical variables***
+```{r}
+ggplot(pharma.df.1,aes(x=clusters_wss,fill=Location)) + geom_bar()
+```
+*Cluster 1 and Cluster 2 seems to have a pattern with respect to the location of the pharmaceutical firms. More than 50% of the firms across both the clusters have "US" as their location. This also states that US has firms which are both profitable to invest (Acceptable Profitability with Moderate Risk) as well as firms which don't yield that good profits (Low Profitability with High Risk). But comparatively the better performing cluster i.e. Cluster 1 seems to have a greater ratio of companies based in US.*\vspace{1mm}
+\newline
+
+*Aggregating the clusters to interpret the attributes - Silhouette*
+```{r}
+int_silhouette <- aggregate(pharma.df.2[,-c(1:2,12:14)],by=list(pharma.df.2$clusters_silhouette),FUN="median")
+print(int_silhouette[,-1])
+```
+***Interpretation:***\vspace{1mm}
+\newline
+***Squandering Investment Group***\vspace{1mm}
+\newline
+*The First Cluster is a highly fluctuative cluster with higher beta (variability in the firm) and leverage (outside borrowings) values indicating that there is high sense of risk in these firms. Also, the market capital & net profit margin are less making it less suitable for any possible investments.*\vspace{2mm}
+\newline
+***Nonplussed Investment Group***\vspace{1mm}
+\newline
+*The Second Cluster is likely mostly similar to that of the "Squandering Investment Group". It seems to have a lot of variability in it's PE Ratio which is the share price to the company value stating that it is likely overvalued. The beta and leverage values are also high stating that there is subsequent risk involved in this group. This cannot be a good choice for a better investment.*\vspace{2mm}
+\newline
+***Fortune Class***\vspace{1mm}
+\newline
+*Third Cluster can be considered as a set of firms with feasible market capital which are properly valued (PE Ratio) with middling risk involved (Beta and Leverage). It also has better returns over the expenditure and assets with a lucrative tendency.It can be a possible source of investment although the capital value is less when distinguished with the fourth cluster, there might be chances of the valuation to change/rise in the future.*\vspace{2mm}
+\newline
+***Exorbitant Viability with Slighter Risk***\vspace{1mm}
+\newline
+*The Fourth Cluster is a good source of investment for any discrete individual who want to set a beneficial pitch for him/her. Here in this cluster as we see when compared to other firms across various clusters, the fourth cluster is having the "Highest Market Capital" of "153.245", "Lofty ROE - Return on Expenditure of "43.10" & ROA - Return on Assets of "17.75", "Sky-Spiking Asset Turnover" of "0.95" and "Net Profit Margin" of "19.5". It also has a "decent beta value" - indicating that the variance would be less and no much of risk would be involved and not only that it has "less leverage value" - which refers stating that the borrowed capital for future investments is small. PE Ratio is less indicating that the price to earnings ratio (share price to company value) is manageable indicating that the company is properly valued. If anyone wants to invest in a company which has a higher capital ratio and moderate risk with fewer liabilities then the firms which are part of this cluster make the best choice.*\vspace{2mm}
+\newline
+***Less Remunerative Clump***\vspace{1mm}
+\newline
+*The Fifth Cluster is stammering when it comes to providing returns on the expenditure which is basically the value which any investor would seek as a return over investment. External borrowings are high as well including good amount of variability in the firms (beta). It also has least capital value across all the groups and shockingly it is amusing to see that the revenue across these firms are highest as well. This might be possibly because the firms might have originated recently and are stabilizing to start their journey in the market.*\vspace{1mm}
+\newline
+
+***Pattern in the categorical variables***
+```{r}
+ggplot(pharma.df.2,aes(x=clusters_silhouette,fill=Location)) + geom_bar()
+```
+*In the silhouette clusters we get to see the see the similar level of pattern towards to the location as observed in the wss. Every cluster in here as more of it's locations in "US" when compared to that with the other locations. But it seems interesting to observe that the best cluster which defines the domain with true sense i.e. Cluster 4 has a greater ratio of US companies with a lesser ratio of Non - US based companies.*\vspace{2mm}
+\newline
+*Note: The patterns therefore obtained in each of the clustering methods are generic, this is mostly because of the less amount of data which didn't give any further scope to visualize the categorical attributes.*\vspace{3mm}
+\newline
+
+***Conclusion:***\vspace{0.3mm}
+\newline
+*Any investment can be characterized by three factors: safety, income, and capital growth. Every investor has to pick an appropriate mix of these three factors.*\vspace{2mm}
+\newline
+*Investment is always bounded to "profit to loss ratio", any given individual would want to maximize their profit with less amount of loss or no loss. Here, from the given data set the cluster named "Exorbitant Viability with Slighter Risk" displays all such characteristics. From the analysis and interpretation done I think this can be the best cluster to choose for an investment given which there is less probability of risk and higher profits.*\vspace{2mm}
+\newline
+*Note: The reason for choosing a cluster from the silhouette method is because it is helping in defining the domain in a better way which can be used by any individuals to make a profitable decision towards their investment choices.*
